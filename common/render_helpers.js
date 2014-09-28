@@ -11,15 +11,18 @@
  */
 
 var marked = require('marked');
-var utils = require('../libs/util');
+var _ = require('lodash');
+var config = require('../config');
+var validator = require('validator');
 
 // Set default options
 var renderer = new marked.Renderer();
 
-renderer.code = function(code, lang) {
-  var language = lang && (' language-' + lang) || '';
-  return '<pre class="prettyprint' + language + '">'
-    + '<code>' + code.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code>'
+renderer.code = function (code, lang) {
+  var language = lang && ('language-' + lang) || '';
+  language = validator.escape(language);
+  return '<pre class="prettyprint ' + language + '">'
+    + '<code>' + validator.escape(code) + '</code>'
     + '</pre>';
 };
 
@@ -29,10 +32,30 @@ marked.setOptions({
   tables: true,
   breaks: true,
   pedantic: false,
-  sanitize: false,
-  smartLists: true
+  sanitize: true,
+  smartLists: true,
+  smartypants: false,
 });
 
-exports.markdown =  function(text) {
-  return '<div class="markdown-text">' + utils.xss(marked(text || '')) + '</div>';
+exports.markdown = function (text) {
+  return '<div class="markdown-text">' + marked(text || '') + '</div>';
+};
+
+exports.escapeSignature = function (signature) {
+  return signature.split('\n').map(function (p) {
+    return _.escape(p);
+  }).join('<br>');
+};
+
+exports.staticFile = function (filePath) {
+  return config.site_static_host + filePath;
+};
+
+exports.tabName = function (tab) {
+  var pair = _.find(config.tabs, function (pair) {
+    return pair[0] === tab;
+  });
+  if (pair) {
+    return pair[1];
+  }
 };

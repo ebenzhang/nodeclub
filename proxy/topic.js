@@ -4,7 +4,8 @@ var models = require('../models');
 var Topic = models.Topic;
 var User = require('./user');
 var Reply = require('./reply');
-var Util = require('../libs/util');
+var tools = require('../common/tools');
+var at = require('../common/at');
 
 /**
  * 根据主题ID获取主题
@@ -66,7 +67,7 @@ exports.getCountByQuery = function (query, callback) {
  * @param {Function} callback 回调函数
  */
 exports.getTopicsByQuery = function (query, opt, callback) {
-  Topic.find(query, ['_id'], opt, function (err, docs) {
+  Topic.find(query, '_id', opt, function (err, docs) {
     if (err) {
       return callback(err);
     }
@@ -96,12 +97,17 @@ exports.getTopicsByQuery = function (query, opt, callback) {
         if (topic) {
           topic.author = author;
           topic.reply = last_reply;
-          topic.friendly_create_at = Util.format_date(topic.create_at, true);
+          topic.friendly_create_at = tools.formatDate(topic.create_at, true);
         }
         return topic;
       }));
     });
   });
+};
+
+// for sitemap
+exports.getLimit5w = function (callback) {
+  Topic.find({}, '_id', {limit: 50000, sort: '-create_at'}, callback);
 };
 
 /**
@@ -119,17 +125,20 @@ exports.getFullTopic = function (id, callback) {
   var proxy = new EventProxy();
   var events = ['topic', 'author', 'replies'];
   proxy
-  .assign(events, function (topic, author, replies) {
-    callback(null, '', topic, author, replies);
-  })
-  .fail(callback);
+    .assign(events, function (topic, author, replies) {
+      callback(null, '', topic, author, replies);
+    })
+    .fail(callback);
 
   Topic.findOne({_id: id}, proxy.done(function (topic) {
     if (!topic) {
       proxy.unbind();
       return callback(null, '此话题不存在或已被删除。');
     }
-    proxy.emit('topic', topic);
+    at.linkUsers(topic.content, proxy.done('topic', function (str) {
+      topic.content = str;
+      return topic;
+    }));
 
     User.getUserById(topic.author_id, proxy.done(function (author) {
       if (!author) {
@@ -190,10 +199,11 @@ exports.reduceCount = function (id, callback) {
   });
 };
 
-exports.newAndSave = function (title, content, authorId, callback) {
+exports.newAndSave = function (title, content, tab, authorId, callback) {
   var topic = new Topic();
   topic.title = title;
   topic.content = content;
+  topic.tab = tab;
   topic.author_id = authorId;
   topic.save(callback);
 };

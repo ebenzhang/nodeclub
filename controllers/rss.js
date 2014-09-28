@@ -1,12 +1,8 @@
-var config = require('../config').config;
+var config = require('../config');
 var convert = require('data2xml')();
-var markdown = require('node-markdown').Markdown;
 var Topic = require('../proxy').Topic;
-
-var rssCache;
-setInterval(function () {
-  rssCache = null;
-}, 1000 * 60 * 5); // 五分钟清理一次
+var mcache = require('memory-cache');
+var marked = require('marked');
 
 exports.index = function (req, res, next) {
   if (!config.rss) {
@@ -14,10 +10,10 @@ exports.index = function (req, res, next) {
     return res.send('Please set `rss` in config.js');
   }
   res.contentType('application/xml');
-  if (!config.debug && rssCache) {
-    res.send(rssCache);
+  if (!config.debug && mcache.get('rss')) {
+    res.send(mcache.get('rss'));
   } else {
-    var opt = { limit: config.rss.max_rss_items, sort: [ [ 'create_at', 'desc' ] ] };
+    var opt = { limit: config.rss.max_rss_items, sort: '-create_at'};
     Topic.getTopicsByQuery({}, opt, function (err, topics) {
       if (err) {
         return next(err);
@@ -30,7 +26,7 @@ exports.index = function (req, res, next) {
           language: config.rss.language,
           description: config.rss.description,
           item: []
-        },
+        }
       };
 
       topics.forEach(function (topic) {
@@ -38,16 +34,16 @@ exports.index = function (req, res, next) {
           title: topic.title,
           link: config.rss.link + '/topic/' + topic._id,
           guid: config.rss.link + '/topic/' + topic._id,
-          description: markdown(topic.content, true),
-          author: topic.author.name,
+          description: marked(topic.content),
+          author: topic.author.loginname,
           pubDate: topic.create_at.toUTCString()
         });
       });
 
-      var rss_content = convert('rss', rss_obj);
+      var rssContent = convert('rss', rss_obj);
 
-      rssCache = rss_content;
-      res.send(rss_content);
+      mcache.put('rss', rssContent, 1000 * 60 * 5); // 五分钟
+      res.send(rssContent);
     });
   }
 };

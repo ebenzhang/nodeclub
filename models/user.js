@@ -1,6 +1,7 @@
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
-var config = require('../config').config;
+var utility = require('utility');
+var mcache = require('memory-cache');
 
 var UserSchema = new Schema({
   name: { type: String},
@@ -29,19 +30,24 @@ var UserSchema = new Schema({
   update_at: { type: Date, default: Date.now },
   is_star: { type: Boolean },
   level: { type: String },
-  active: { type: Boolean, default: true },
+  active: { type: Boolean, default: false },
 
   receive_reply_mail: {type: Boolean, default: false },
   receive_at_mail: { type: Boolean, default: false },
   from_wp: { type: Boolean },
 
-  retrieve_time : {type: Number},
-  retrieve_key : {type: String}
+  retrieve_time: {type: Number},
+  retrieve_key: {type: String}
 });
 
 UserSchema.virtual('avatar_url').get(function () {
-  var url = this.profile_image_url || this.avatar || config.site_static_host + '/public/images/user_icon&48.png';
-  return url.replace('http://www.gravatar.com/', 'http://cnodegravatar.u.qiniudn.com/');
+  var url = this.avatar || ('http://www.gravatar.com/avatar/' + utility.md5(this.email.toLowerCase()) + '?size=48');
+  return url;
+});
+
+UserSchema.virtual('isAdvanced').get(function () {
+  // 积分高于 700 则认为是高级用户
+  return this.score > 700 || this.is_star;
 });
 
 UserSchema.index({name: 1});
